@@ -1,0 +1,14 @@
+let base = 10;
+let offset = 5;
+
+begin
+    server := begin
+        port := ^(base offset +);
+        host := "localhost";
+    end;
+    
+    limits := begin
+        timeout := 30;
+        max_conn := ^(min(100, 50));
+    end;
+end
