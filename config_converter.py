@@ -72,7 +72,35 @@ class ConfigParser:
         if expr in self.constants:
             return self.constants[expr]
         
-        tokens = expr.split()
+        # Разбиваем на токены, учитывая функции с аргументами
+        tokens = []
+        i = 0
+        while i < len(expr):
+            if expr[i] == ' ':
+                i += 1
+                continue
+            
+            # Если встретили min(
+            if expr[i:i+4] == 'min(':
+                # Ищем закрывающую скобку
+                paren_count = 1
+                j = i + 4
+                while j < len(expr) and paren_count > 0:
+                    if expr[j] == '(':
+                        paren_count += 1
+                    elif expr[j] == ')':
+                        paren_count -= 1
+                    j += 1
+                tokens.append(expr[i:j])
+                i = j
+            else:
+                # Обычный токен
+                j = i
+                while j < len(expr) and expr[j] != ' ':
+                    j += 1
+                tokens.append(expr[i:j])
+                i = j
+        
         stack = []
         
         for token in tokens:
@@ -87,6 +115,7 @@ class ConfigParser:
                 a = stack.pop()
                 stack.append(a + b)
             elif token.startswith('min(') and token.endswith(')'):
+                # Извлекаем аргументы из min(100, 50)
                 args_str = token[4:-1]
                 args = []
                 for arg in args_str.split(','):
@@ -110,34 +139,44 @@ class ConfigParser:
     def _parse_dictionaries(self, text: str) -> dict:
         result = {}
         
-        dict_pattern = r'begin\s+(.*?)\s+end'
-        dict_matches = re.finditer(dict_pattern, text, re.DOTALL)
+        # Удаляем комментарии и лишние пробелы
+        text = text.strip()
+        if not text:
+            return result
         
-        for match in dict_matches:
-            dict_content = match.group(1)
-            field_pattern = r'([a-z][a-z0-9_]*)\s*:=\s*(.+?);'
-            fields = {}
+        # Ищем begin...end
+        pattern = r'begin(.*?)end'
+        matches = re.findall(pattern, text, re.DOTALL)
+        
+        for dict_content in matches:
+            # Разбиваем на строки и убираем пустые
+            lines = [line.strip() for line in dict_content.split('\n') if line.strip()]
             
-            for field_match in re.finditer(field_pattern, dict_content, re.DOTALL):
-                name = field_match.group(1)
-                value_str = field_match.group(2).strip()
-                
-                if re.match(r'^[+-]?([1-9][0-9]*|0)$', value_str):
-                    fields[name] = int(value_str)
-                elif value_str.startswith('begin'):
-                    nested_dict = self._parse_dictionaries(value_str)
-                    if nested_dict:
-                        fields[name] = nested_dict
-                elif '^(' in value_str:
-                    expr_match = re.match(r'\^\((.+)\)', value_str)
-                    if expr_match:
-                        expr = expr_match.group(1)
-                        fields[name] = self._evaluate_constant_expression(expr)
-                else:
-                    fields[name] = value_str
-            
-            if '=' not in match.group(0):
-                result.update(fields)
+            for line in lines:
+                # Парсим поле вида "name := value;"
+                if ':=' in line and line.endswith(';'):
+                    name, value_part = line.split(':=', 1)
+                    name = name.strip()
+                    value_str = value_part[:-1].strip()  # Убираем ;
+                    
+                    if re.match(r'^[+-]?([1-9][0-9]*|0)$', value_str):
+                        result[name] = int(value_str)
+                    elif value_str.startswith('begin'):
+                        nested_dict = self._parse_dictionaries(value_str)
+                        if nested_dict:
+                            result[name] = nested_dict
+                    elif '^(' in value_str:
+                        expr_match = re.match(r'\^\((.+)\)', value_str)
+                        if expr_match:
+                            expr = expr_match.group(1)
+                            result[name] = self._evaluate_constant_expression(expr)
+                    else:
+                        # Убираем лишние кавычки
+                        if value_str.startswith('"') and value_str.endswith('"'):
+                            value_str = value_str[1:-1]
+                        elif value_str.startswith("'") and value_str.endswith("'"):
+                            value_str = value_str[1:-1]
+                        result[name] = value_str
         
         return result
     
