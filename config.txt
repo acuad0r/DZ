@@ -4,7 +4,6 @@ let offset = 5;
 begin
     server := begin
         port := 30;
-        host := "localhost";
     end;
     
     limits := begin
@@ -13,3 +12,4 @@ begin
     end;
 
 end
+
