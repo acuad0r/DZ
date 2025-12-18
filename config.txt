@@ -3,12 +3,13 @@ let offset = 5;
 
 begin
     server := begin
-        port := ^(base offset +);
+        port := 30;
         host := "localhost";
     end;
     
     limits := begin
         timeout := 30;
-        max_conn := ^(min(100, 50));
+        max_conn := 100;
     end;
+
 end
